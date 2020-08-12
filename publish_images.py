@@ -3,10 +3,12 @@
 from glob import glob
 import numpy as np
 import cv2
+import os
 import rospy
 from cv_bridge import CvBridge
 import message_filters
 from sensor_msgs.msg import Image, CameraInfo
+import shutil
 from stereo_msgs.msg import DisparityImage
 from std_msgs.msg import Header
 import yaml
@@ -130,6 +132,11 @@ class ImagePublisher:
         self.right_camera_info.width = self.Rectifier.get_output_shape()[1]
         self.camera_pub_left.publish(self.left_camera_info)
         self.camera_pub_right.publish(self.right_camera_info)
+        if output_path != '':
+            cv2.imwrite(os.path.join(output_path,'images',str(left_message.header.seq).zfill(8)+'.png'), left_image_rectified)
+            timestamps_file = open(os.path.join(output_path,'timestamps.txt'), 'a')
+            timestamps_file.write('{:.9f}\n'.format(left_message.header.stamp.secs+left_message.header.stamp.nsecs/1000000000.000))
+        
 #-----------------------------------------End of class ImagePublisher --------------------------------------
 
 def callback(left_message, right_message):
@@ -139,6 +146,7 @@ def callback(left_message, right_message):
 def publisher():
     global bridge
     global image_publisher
+    global output_path
 
     rospy.init_node('rectify_and_publish', anonymous=True)
     queue = rospy.get_param('~queue_size', 10)
@@ -147,6 +155,14 @@ def publisher():
     right_topic = rospy.get_param('~right_topic', '/stereo/right/image_raw')
     encoding = rospy.get_param('~encoding', 'bgr8')
     filename_config = rospy.get_param('~file_config')
+    output_path = rospy.get_param('~output_path_left_image_rect', '')
+
+    if output_path != '':
+        timestamps_file = open(os.path.join(output_path,'timestamps.txt'), 'w')
+        timestamps_file.close()
+	if os.path.exists(os.path.join(output_path,'images')):
+            shutil.rmtree(os.path.join(output_path,'images'))
+        os.makedirs(os.path.join(output_path,'images'))
 
     image_publisher = ImagePublisher(filename_config, '/stereo/left/image_rect', '/stereo/right/image_rect', '/stereo/left/camera_info', '/stereo/right/camera_info', encoding, queue)
     bridge = CvBridge()
